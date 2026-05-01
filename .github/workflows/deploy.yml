@@ -21,6 +21,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
+            if [ ! -d "crm" ]; then
+              git clone https://github.com/harryselectedjobs/crm.git
+            fi
             cd crm
             git pull origin main
             echo "DB_HOST=${{ secrets.DB_HOST }}" > .env
