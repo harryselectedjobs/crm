@@ -6,7 +6,6 @@ def get_all_contacts(search: str = None, page: int = 1, limit: int = 10):
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-
         offset = (page - 1) * limit
 
         if search:
@@ -23,7 +22,7 @@ def get_all_contacts(search: str = None, page: int = 1, limit: int = 10):
                 SELECT * FROM contacts
                 WHERE firstname LIKE %s OR lastname LIKE %s
                 OR email LIKE %s OR company LIKE %s OR industry LIKE %s
-                ORDER BY id DESC
+                ORDER BY contactId DESC
                 LIMIT %s OFFSET %s
             """
             cursor.execute(query, (search_term, search_term, search_term, search_term, search_term, limit, offset))
@@ -31,11 +30,10 @@ def get_all_contacts(search: str = None, page: int = 1, limit: int = 10):
             cursor.execute("SELECT COUNT(*) as total FROM contacts")
             total = cursor.fetchone()["total"]
 
-            query = "SELECT * FROM contacts ORDER BY id DESC LIMIT %s OFFSET %s"
+            query = "SELECT * FROM contacts ORDER BY contactId DESC LIMIT %s OFFSET %s"
             cursor.execute(query, (limit, offset))
 
         contacts = cursor.fetchall()
-
         cursor.close()
         conn.close()
 
@@ -47,7 +45,6 @@ def get_all_contacts(search: str = None, page: int = 1, limit: int = 10):
             "limit": limit,
             "total_pages": (total + limit - 1) // limit
         }
-
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -57,17 +54,14 @@ def get_contact_by_id(contact_id: int):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT * FROM contacts WHERE id = %s", (contact_id,))
+        cursor.execute("SELECT * FROM contacts WHERE contactId = %s", (contact_id,))
         contact = cursor.fetchone()
-
         cursor.close()
         conn.close()
 
         if not contact:
             return {"status": "error", "message": f"Contact with id {contact_id} not found"}
-
         return {"status": "success", "data": contact}
-
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -77,8 +71,7 @@ def create_contact(data: dict):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # ✅ Check if email already exists
-        cursor.execute("SELECT id FROM contacts WHERE LOWER(email) = LOWER(%s)", (data.get("email"),))
+        cursor.execute("SELECT contactId FROM contacts WHERE LOWER(email) = LOWER(%s)", (data.get("email"),))
         if cursor.fetchone():
             cursor.close()
             conn.close()
@@ -96,7 +89,6 @@ def create_contact(data: dict):
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-
         cursor.execute(insert_query, (
             data.get("firstname"),
             data.get("lastname"),
@@ -118,15 +110,12 @@ def create_contact(data: dict):
             data.get("company_size"),
             data.get("lifecycle_stage", "NEW")
         ))
-
         conn.commit()
         new_id = cursor.lastrowid
-
         cursor.close()
         conn.close()
 
         return {"status": "success", "message": "Contact created successfully", "id": new_id}
-
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -136,14 +125,12 @@ def update_contact(contact_id: int, data: dict):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # ✅ Check if contact exists
-        cursor.execute("SELECT id FROM contacts WHERE id = %s", (contact_id,))
+        cursor.execute("SELECT contactId FROM contacts WHERE contactId = %s", (contact_id,))
         if not cursor.fetchone():
             cursor.close()
             conn.close()
             return {"status": "error", "message": f"Contact with id {contact_id} not found"}
 
-        # ✅ Build dynamic SET clause from provided fields only
         allowed_fields = [
             "firstname", "lastname", "jobtitle", "job_function", "seniority",
             "email", "mobilephone", "phone",
@@ -165,15 +152,12 @@ def update_contact(contact_id: int, data: dict):
         values = list(fields_to_update.values())
         values.append(contact_id)
 
-        update_query = f"UPDATE contacts SET {set_clause} WHERE id = %s"
-        cursor.execute(update_query, values)
+        cursor.execute(f"UPDATE contacts SET {set_clause} WHERE contactId = %s", values)
         conn.commit()
-
         cursor.close()
         conn.close()
 
         return {"status": "success", "message": "Contact updated successfully"}
-
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -183,21 +167,18 @@ def delete_contact(contact_id: int):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # ✅ Check if contact exists
-        cursor.execute("SELECT id FROM contacts WHERE id = %s", (contact_id,))
+        cursor.execute("SELECT contactId FROM contacts WHERE contactId = %s", (contact_id,))
         if not cursor.fetchone():
             cursor.close()
             conn.close()
             return {"status": "error", "message": f"Contact with id {contact_id} not found"}
 
-        cursor.execute("DELETE FROM contacts WHERE id = %s", (contact_id,))
+        cursor.execute("DELETE FROM contacts WHERE contactId = %s", (contact_id,))
         conn.commit()
-
         cursor.close()
         conn.close()
 
         return {"status": "success", "message": "Contact deleted successfully"}
-
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -211,15 +192,12 @@ def delete_multiple_contacts(contact_ids: list):
         cursor = conn.cursor(dictionary=True)
 
         placeholders = ", ".join(["%s"] * len(contact_ids))
-        cursor.execute(f"DELETE FROM contacts WHERE id IN ({placeholders})", contact_ids)
+        cursor.execute(f"DELETE FROM contacts WHERE contactId IN ({placeholders})", contact_ids)
         conn.commit()
-
         deleted_count = cursor.rowcount
-
         cursor.close()
         conn.close()
 
         return {"status": "success", "message": f"{deleted_count} contacts deleted successfully"}
-
     except Exception as e:
         return {"status": "error", "message": str(e)}
