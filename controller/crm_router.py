@@ -16,7 +16,9 @@ from repository.contacts_table_operation import (
 
 router = APIRouter(prefix="/api")
 
-
+@router.get("/test")
+def health_service():
+    return {"message":"Hello"}
 
 # ---------------------------
 # CSV UPLOAD
