@@ -14,11 +14,9 @@ def get_db_connection():
             password=os.getenv("DB_PASSWORD"),
             database=os.getenv("DB_NAME")
         )
-
         if connection.is_connected():
             print("Connected to MySQL database")
             return connection
-
     except Error as e:
         print(f"Error while connecting to MySQL: {e}")
         return None
