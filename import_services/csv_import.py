@@ -4,6 +4,9 @@ from fastapi import UploadFile
 from repository.db_connection import get_db_connection
 
 
+# ================================
+# ✅ IMPORT COMPANIES (NO NULLS)
+# ================================
 def import_companies_from_csv(uploadFile: UploadFile):
     try:
         uploadFile.file.seek(0)
@@ -30,50 +33,50 @@ def import_companies_from_csv(uploadFile: UploadFile):
             "Area of Work": "area_of_work"
         })
 
-        df["created_at"] = datetime.now()
-        df["updated_at"] = datetime.now()
-
+        # Ensure all required columns exist
         columns = [
             "name", "domain", "website", "description",
             "city", "state", "country", "address", "zip",
             "industry", "numberofemployees", "annualrevenue",
             "linkedin_company_page", "technology_category",
-            "software_category", "area_of_work",
-            "created_at", "updated_at"
+            "software_category", "area_of_work"
         ]
-
         df = df.reindex(columns=columns)
 
-        # ✅ Convert numerics BEFORE replacing NaN with None
-        df["numberofemployees"] = pd.to_numeric(df["numberofemployees"], errors='coerce')
-        df["annualrevenue"] = pd.to_numeric(df["annualrevenue"], errors='coerce')
+        # 🔥 FILL NULL VALUES (NO NULLS IN DB)
+        df = df.fillna({
+            "name": "Unknown Company",
+            "domain": "unknown.com",
+            "website": "unknown.com",
+            "description": "",
+            "city": "Unknown",
+            "state": "Unknown",
+            "country": "Unknown",
+            "address": "",
+            "zip": "",
+            "industry": "Unknown",
+            "numberofemployees": 0,
+            "annualrevenue": 0,
+            "linkedin_company_page": "",
+            "technology_category": "",
+            "software_category": "",
+            "area_of_work": ""
+        })
 
-        # ✅ Now safely replace all NaN with None (SQL NULL)
-        df = df.astype(object).where(pd.notnull(df), None)
+        # Ensure numeric
+        df["numberofemployees"] = pd.to_numeric(df["numberofemployees"], errors="coerce").fillna(0)
+        df["annualrevenue"] = pd.to_numeric(df["annualrevenue"], errors="coerce").fillna(0)
+
+        # Add timestamps
+        df["created_at"] = datetime.now()
+        df["updated_at"] = datetime.now()
+
+        # Final column order
+        columns.extend(["created_at", "updated_at"])
+        df = df[columns]
 
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        # ✅ Fetch existing company names from DB
-        cursor.execute("SELECT LOWER(name) FROM company WHERE name IS NOT NULL")
-        existing_names = set(row[0] for row in cursor.fetchall())
-
-        # ✅ Filter out duplicates (case-insensitive)
-        df_filtered = df[
-            df["name"].apply(lambda x: x.lower() if x else None).isin(existing_names) == False
-        ]
-
-        skipped = len(df) - len(df_filtered)
-
-        if df_filtered.empty:
-            cursor.close()
-            conn.close()
-            return {
-                "status": "success",
-                "rows_inserted": 0,
-                "rows_skipped": skipped,
-                "message": "All companies already exist in the database."
-            }
 
         insert_query = """
         INSERT INTO company (
@@ -87,7 +90,7 @@ def import_companies_from_csv(uploadFile: UploadFile):
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
-        data = [tuple(row) for row in df_filtered.to_numpy()]
+        data = [tuple(row) for row in df.to_numpy()]
 
         cursor.executemany(insert_query, data)
         conn.commit()
@@ -97,14 +100,16 @@ def import_companies_from_csv(uploadFile: UploadFile):
 
         return {
             "status": "success",
-            "rows_inserted": len(df_filtered),
-            "rows_skipped": skipped
+            "rows_inserted": len(df)
         }
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 
+# ================================
+# ✅ IMPORT CONTACTS (NO NULLS)
+# ================================
 def import_contacts_from_csv(uploadFile: UploadFile):
     try:
         uploadFile.file.seek(0)
@@ -147,39 +152,38 @@ def import_contacts_from_csv(uploadFile: UploadFile):
 
         df = df.reindex(columns=columns)
 
-        # ✅ Convert numerics BEFORE replacing NaN with None
-        df["followercount"] = pd.to_numeric(df["followercount"], errors='coerce')
-        df["linkedinconnections"] = pd.to_numeric(df["linkedinconnections"], errors='coerce')
+        # 🔥 FILL NULL VALUES
+        df = df.fillna({
+            "firstname": "",
+            "lastname": "",
+            "jobtitle": "",
+            "job_function": "",
+            "seniority": "",
+            "email": "",
+            "mobilephone": "",
+            "phone": "",
+            "hs_linkedin_url": "",
+            "followercount": 0,
+            "linkedinconnections": 0,
+            "country": "Unknown",
+            "city": "Unknown",
+            "state": "Unknown",
+            "start_date": "",  # ✅ FIXED
+            "company": "",
+            "industry": "Unknown",
+            "company_size": "",
+            "lifecycle_stage": "NEW"
+        })
 
-        # ✅ Now safely replace all NaN with None (SQL NULL)
-        df = df.astype(object).where(pd.notnull(df), None)
+        # Ensure numeric
+        df["followercount"] = pd.to_numeric(df["followercount"], errors="coerce").fillna(0)
+        df["linkedinconnections"] = pd.to_numeric(df["linkedinconnections"], errors="coerce").fillna(0)
 
-        # ✅ Skip rows with no email
-        df = df[df["email"].notna() & (df["email"] != "")]
+        # Remove rows without email
+        df = df[df["email"] != ""]
 
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        # ✅ Fetch existing emails from DB
-        cursor.execute("SELECT LOWER(email) FROM contacts WHERE email IS NOT NULL")
-        existing_emails = set(row[0] for row in cursor.fetchall())
-
-        # ✅ Skip rows where email already exists in DB
-        df_filtered = df[
-            df["email"].apply(lambda x: x.lower() if x else None).isin(existing_emails) == False
-        ]
-
-        skipped = len(df) - len(df_filtered)
-
-        if df_filtered.empty:
-            cursor.close()
-            conn.close()
-            return {
-                "status": "success",
-                "rows_inserted": 0,
-                "rows_skipped": skipped,
-                "message": "All contacts already exist in the database."
-            }
 
         insert_query = """
         INSERT INTO contacts (
@@ -194,7 +198,7 @@ def import_contacts_from_csv(uploadFile: UploadFile):
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
-        data = [tuple(row) for row in df_filtered.to_numpy()]
+        data = [tuple(row) for row in df.to_numpy()]
 
         cursor.executemany(insert_query, data)
         conn.commit()
@@ -204,13 +208,16 @@ def import_contacts_from_csv(uploadFile: UploadFile):
 
         return {
             "status": "success",
-            "rows_inserted": len(df_filtered),
-            "rows_skipped": skipped
+            "rows_inserted": len(df)
         }
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+
+# ================================
+# ✅ ROUTER HANDLER
+# ================================
 def process_csv_file(file: UploadFile, type: str):
     try:
         if type == "contacts":
