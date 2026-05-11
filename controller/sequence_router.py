@@ -1,7 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+from typing import List, Dict, Any
+import httpx
+import json
+from fastapi import APIRouter, HTTPException, Request
 
+from email_sequence_queue_repository.email_sequence_queue_services import add_sequence_records, get_scheduled_sequences
 from sequence_services.sequence_service_layer import (
     create_sequence, list_sequences, get_sequence, update_sequence, delete_sequence,
     add_step, list_steps, update_step, delete_step,
@@ -54,6 +59,10 @@ class WebhookEvent(BaseModel):
     step_id:       int
     contact_id:    int
     event:         str
+
+class AddSequenceRequest(BaseModel):
+    email_list: List[str]
+    sequence_response: Dict[str, Any]
 
 
 # ================================================================
@@ -159,9 +168,72 @@ def route_get_enrollment_logs(enrollment_id: int):
 
 
 # ================================================================
+# EMAIL SEQUENCE QUEUE ROUTES
+# ================================================================
+
+@router.post("/schedule-sequence")
+def schedule_sequence(request: AddSequenceRequest):
+
+    response = add_sequence_records(
+        request.email_list,
+        request.sequence_response
+    )
+
+    if not response.get("success"):
+        raise HTTPException(status_code=500, detail=response)
+
+    return response
+
+
+@router.get("/scheduled-sequences")
+def fetch_scheduled_sequences():
+
+    response = get_scheduled_sequences()
+
+    if not response.get("success"):
+        raise HTTPException(status_code=500, detail=response)
+
+
+# ================================================================
 # WEBHOOK ROUTE
 # ================================================================
 
-@router.post("/webhooks/email-event")
-def route_handle_email_event(payload: WebhookEvent):
-    return _handle(handle_email_event, payload.enrollment_id, payload.step_id, payload.event)
+@router.post("/webhooks/ses-events")
+async def handle_ses_event(request: Request):
+    body = await request.json()
+    msg_type = body.get("Type")
+
+    # Step 1: SNS subscription confirmation (one-time)
+    if msg_type == "SubscriptionConfirmation":
+        confirm_url = body.get("SubscribeURL")
+        async with httpx.AsyncClient() as client:
+            await client.get(confirm_url)  # Must hit this to activate
+        return {"status": "confirmed"}
+
+    # Step 2: Actual SES event
+    if msg_type == "Notification":
+        message = json.loads(body.get("Message", "{}"))
+        event_type = message.get("eventType")  # Open, Click, Bounce, Delivery
+        mail = message.get("mail", {})
+
+        message_id = mail.get("messageId")   # matches SES send response MessageId
+        recipient = mail.get("destination", [None])[0]
+
+        if event_type == "Open":
+            # Look up enrollment by message_id in your DB
+            # update status to "opened"
+            print(f"📬 Email opened by {recipient}, messageId={message_id}")
+
+        elif event_type == "Click":
+            link = message.get("click", {}).get("link")
+            print(f"🖱️ Link clicked by {recipient}: {link}")
+
+        elif event_type == "Bounce":
+            print(f"❌ Bounced: {recipient}")
+
+        elif event_type == "Delivery":
+            print(f"✅ Delivered to {recipient}")
+
+        return {"status": "ok"}
+
+    return {"status": "ignored"}
