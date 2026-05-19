@@ -1,55 +1,84 @@
+from aifc import Error
+
 from repository.db_connection import get_db_connection
 
-def create_email_sequence_queue_table():
+
+def reset_client_inquiries():
     connection = get_db_connection()
-
     if not connection:
-        print("Database connection failed")
         return
-
     try:
         cursor = connection.cursor()
 
-        create_table_query = """
-        CREATE TABLE IF NOT EXISTS email_sequence_queue (
+        # Step 1: Delete all records
+        cursor.execute("DELETE FROM client_inquiries")
+        connection.commit()
+        print("All records deleted successfully")
 
-            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        # Step 2: Insert few sample records
+        records = [
+            (
+                "John Doe",
+                "Tech Corp",
+                "john.doe@techcorp.com",
+                "+1-555-001-0001",
+                "Software Development",
+                "Looking for a senior Python developer for a 6-month project.",
+                False
+            ),
+            (
+                "Jane Smith",
+                "Legal Partners LLP",
+                "jane.smith@legalpartners.com",
+                "+1-555-002-0002",
+                "Legal Services",
+                "Need a corporate lawyer for contract negotiations.",
+                False
+            ),
+            (
+                "Robert Brown",
+                "Finance Hub",
+                "robert.brown@financehub.com",
+                "+1-555-003-0003",
+                "Finance & Accounting",
+                "Hiring a CFO for our growing startup.",
+                True
+            ),
+            (
+                "Emily Davis",
+                "HealthCare Plus",
+                "emily.davis@healthcareplus.com",
+                "+1-555-004-0004",
+                "Healthcare",
+                "Seeking experienced medical consultants for clinic expansion.",
+                False
+            ),
+            (
+                "Michael Wilson",
+                "BuildIt Construction",
+                "michael.wilson@buildit.com",
+                "+1-555-005-0005",
+                "Engineering",
+                "Require civil engineers for a large infrastructure project.",
+                True
+            ),
+        ]
 
-            email VARCHAR(255) NOT NULL,
-
-            sequence JSON NOT NULL,
-
-            current_step INT DEFAULT 0,
-
-            next_send_at DATETIME NOT NULL,
-
-            status VARCHAR(50) DEFAULT 'active',
-
-            completed BOOLEAN DEFAULT FALSE,
-
-            last_sent_at DATETIME NULL,
-
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            ON UPDATE CURRENT_TIMESTAMP
-
-        );
+        query = """
+            INSERT INTO client_inquiries 
+            (full_name, company_name, work_email, phone_number, practice_area, hiring_brief, is_contacted)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
 
-        cursor.execute(create_table_query)
-
+        cursor.executemany(query, records)
         connection.commit()
+        print(f"{cursor.rowcount} records inserted successfully")
 
-        print("Table 'email_sequence_queue' created successfully")
-
-    except Exception as e:
-        print(f"Error creating table: {e}")
-
+    except Error as e:
+        print(f"Error: {e}")
     finally:
-        cursor.close()
-        connection.close()
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
 
-
-if __name__ == "__main__":
-    create_email_sequence_queue_table()
+reset_client_inquiries()
