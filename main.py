@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from controllers.crm_router import router as crm_router
 from controllers.sequence_router import router as sequence_router
 from controllers.contactUs_router import router as contact_us_router
+from controllers.auth_router import router as authentication_router
 
 apps = FastAPI()
 
@@ -20,6 +21,8 @@ apps.add_middleware(
 apps.include_router(crm_router)
 apps.include_router(sequence_router)
 apps.include_router(contact_us_router)
+apps.include_router(authentication_router)
+
 
 if __name__ == "__main__":
     uvicorn.run("main:apps", host="0.0.0.0", port=1802, reload=True)

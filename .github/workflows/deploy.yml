@@ -26,11 +26,9 @@ jobs:
             fi
             cd crm
             git pull origin main
-            echo "DB_HOST=${{ secrets.DB_HOST }}" > .env
-            echo "DB_USER=${{ secrets.DB_USER }}" >> .env
-            echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
-            echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
-            echo "DB_PORT=${{ secrets.DB_PORT }}" >> .env
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" > .env
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
+            echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> .env
             docker build -t crm .
             docker stop crm-container || true
             docker rm crm-container || true
