@@ -17,3 +17,6 @@ EXPOSE 1802
 
 # Run the app
 CMD ["uvicorn", "main:apps", "--host", "0.0.0.0", "--port", "1802"]
+
+
+
