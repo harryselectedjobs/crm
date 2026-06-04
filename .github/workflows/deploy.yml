@@ -34,6 +34,7 @@ jobs:
             echo "DB_USER=${{ secrets.DB_USER }}" >> .env
             echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
             echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
+            echo "GUARDIAN_API_KEY=${{ secrets.GUARDIAN_API_KEY }}" >> .env
             docker build -t crm .
             docker stop crm-container || true
             docker rm crm-container || true

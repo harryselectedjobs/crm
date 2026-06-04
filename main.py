@@ -6,6 +6,7 @@ from controllers.crm_router import router as crm_router
 from controllers.sequence_router import router as sequence_router
 from controllers.contactUs_router import router as contact_us_router
 from controllers.auth_router import router as authentication_router
+from controllers.news_router import router as tech_news_router
 
 apps = FastAPI()
 
@@ -22,6 +23,7 @@ apps.include_router(crm_router)
 apps.include_router(sequence_router)
 apps.include_router(contact_us_router)
 apps.include_router(authentication_router)
+apps.include_router(tech_news_router)
 
 
 if __name__ == "__main__":
