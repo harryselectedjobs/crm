@@ -1,7 +1,7 @@
 from botocore.exceptions import ClientError
 from datetime import datetime
 from aws_connection.dynamodb_connection import _get_dynamodb_client
-
+from boto3.dynamodb.conditions import Key
 
 def push_enrollment(sequence: dict, contact: dict):
     dynamodb = _get_dynamodb_client()
