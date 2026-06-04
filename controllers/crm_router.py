@@ -1,7 +1,10 @@
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, UploadFile, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, EmailStr
 
+from aws_ses.ses_configutaion import send_email_ses
 from import_services.csv_import import process_csv_file
 
 from repository.company_table_operation import (
@@ -184,3 +187,35 @@ def delete_many_contacts(data: DeleteContacts):
 @router.delete("/contacts/{contact_id}")
 def delete_single_contact(contact_id: int):
     return delete_contact(contact_id)
+
+
+# ses email
+
+
+class SendEmailRequest(BaseModel):
+    recipient: EmailStr
+    subject: str
+    body_text: str
+    body_html: str
+
+
+@router.post("/send-email")
+def send_email(payload: SendEmailRequest):
+    try:
+        response = send_email_ses(
+            recipient=payload.recipient,
+            subject=payload.subject,
+            body_text=payload.body_text,
+            body_html=payload.body_html
+        )
+
+        return {
+            "success": True,
+            "message_id": response.get("MessageId")
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send email: {str(e)}"
+        )
