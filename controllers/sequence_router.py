@@ -7,6 +7,7 @@ import json
 from fastapi import APIRouter, HTTPException, Request
 
 from email_sequence_queue_repository.email_sequence_queue_services import add_sequence_records, get_scheduled_sequences
+from email_sequence_queue_repository.schedule_sequence import push_enrollment, get_sequence_tracking
 from sequence_services.sequence_service_layer import (
     create_sequence, list_sequences, get_sequence, update_sequence, delete_sequence,
     add_step, list_steps, update_step, delete_step,
@@ -237,3 +238,71 @@ async def handle_ses_event(request: Request):
         return {"status": "ok"}
 
     return {"status": "ignored"}
+
+
+# ── Pydantic Schemas ──────────────────────────────────────────────────────────
+
+class StepSchema(BaseModel):
+    step_order: int
+    delay_days: int
+    subject: str
+    body_template: str
+
+
+class SequenceSchema(BaseModel):
+    sequence_id: int
+    name: str
+    goal: Optional[str] = None
+    steps: List[StepSchema]
+
+
+class ContactSchema(BaseModel):
+    contact_id: int
+    email: str
+    firstname: Optional[str] = ""
+    lastname: Optional[str] = ""
+    company: Optional[str] = ""
+    jobtitle: Optional[str] = ""
+
+
+class PushEnrollmentRequest(BaseModel):
+    sequence: SequenceSchema
+    contacts: List[ContactSchema]
+
+
+# ── Router ────────────────────────────────────────────────────────────────────
+
+@router.post("/sequence-queue/enroll")
+def route_push_enrollment(payload: PushEnrollmentRequest):
+    """
+    Enroll one or more contacts into a sequence in DynamoDB.
+    """
+    success = []
+    skipped = []
+    failed = []
+
+    for contact in payload.contacts:
+        try:
+            push_enrollment(
+                sequence=payload.sequence.model_dump(),
+                contact=contact.model_dump()
+            )
+            success.append(contact.email)
+        except Exception as e:
+            failed.append({"email": contact.email, "error": str(e)})
+
+    return {
+        "success": success,
+        "skipped": skipped,
+        "failed": failed,
+        "summary": {
+            "total": len(payload.contacts),
+            "enrolled": len(success),
+            "failed": len(failed),
+        }
+    }
+
+
+@router.get("/sequence-queue/{sequence_id}/tracking")
+def route_get_tracking(sequence_id: str):
+    return get_sequence_tracking(sequence_id)
