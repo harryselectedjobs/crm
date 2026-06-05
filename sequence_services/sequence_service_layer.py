@@ -1,5 +1,8 @@
 from datetime import datetime
 from mysql.connector import Error
+from boto3.dynamodb.conditions import Key
+
+from aws_connection.dynamodb_connection import _get_dynamodb_client
 from repository.db_connection import get_db_connection
 
 
@@ -432,3 +435,57 @@ def handle_email_event(enrollment_id: int, step_id: int, event: str) -> dict:
         raise ValueError(str(e))
     finally:
         conn.close()
+
+
+def get_unenrolled_contacts(sequence_id: str, page: int = 1, limit: int = 10) -> dict:
+    try:
+        # Step 1 — get already enrolled contact_ids from DynamoDB
+        dynamodb = _get_dynamodb_client()
+        table = dynamodb.Table("SequenceEnrollments")
+
+        response = table.query(
+            KeyConditionExpression=Key("sequence_id").eq(str(sequence_id)),
+            ProjectionExpression="contact_id"
+        )
+        enrolled_ids = [int(item["contact_id"]) for item in response.get("Items", [])]
+
+        # Step 2 — fetch contacts from MySQL excluding enrolled ones
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        offset = (page - 1) * limit
+
+        if enrolled_ids:
+            placeholders = ", ".join(["%s"] * len(enrolled_ids))
+            exclude_clause = f"AND contactId NOT IN ({placeholders})"
+        else:
+            exclude_clause = ""
+            enrolled_ids = []
+
+        # count
+        cursor.execute(
+            f"SELECT COUNT(*) as total FROM contacts WHERE 1=1 {exclude_clause}",
+            enrolled_ids
+        )
+        total = cursor.fetchone()["total"]
+
+        # fetch
+        cursor.execute(
+            f"SELECT * FROM contacts WHERE 1=1 {exclude_clause} ORDER BY contactId DESC LIMIT %s OFFSET %s",
+            enrolled_ids + [limit, offset]
+        )
+        contacts = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        return {
+            "status": "success",
+            "data": contacts,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit,
+            "already_enrolled": len(enrolled_ids)
+        }
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

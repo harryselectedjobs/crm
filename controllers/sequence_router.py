@@ -13,7 +13,7 @@ from sequence_services.sequence_service_layer import (
     add_step, list_steps, update_step, delete_step,
     enroll_contact, list_enrollments, get_contact_enrollments, update_enrollment_status,
     get_contact_logs, get_enrollment_logs,
-    handle_email_event
+    handle_email_event, get_unenrolled_contacts
 )
 
 router = APIRouter(prefix="/api/v1", tags=["Sequences"])
@@ -306,3 +306,8 @@ def route_push_enrollment(payload: PushEnrollmentRequest):
 @router.get("/sequence-queue/{sequence_id}/tracking")
 def route_get_tracking(sequence_id: str):
     return get_sequence_tracking(sequence_id)
+
+
+@router.get("/sequence-queue/{sequence_id}/unenrolled-contacts")
+def route_get_unenrolled_contacts(sequence_id: str, page: int = 1, limit: int = 10):
+    return get_unenrolled_contacts(sequence_id=sequence_id, page=page, limit=limit)
