@@ -309,5 +309,5 @@ def route_get_tracking(sequence_id: str):
 
 
 @router.get("/sequence-queue/{sequence_id}/unenrolled-contacts")
-def route_get_unenrolled_contacts(sequence_id: str, page: int = 1, limit: int = 10):
+def route_get_unenrolled_contacts(sequence_id: str, page: int = 1, limit: int = 100):
     return get_unenrolled_contacts(sequence_id=sequence_id, page=page, limit=limit)
