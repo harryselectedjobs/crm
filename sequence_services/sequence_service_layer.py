@@ -439,41 +439,84 @@ def handle_email_event(enrollment_id: int, step_id: int, event: str) -> dict:
 
 def get_unenrolled_contacts(sequence_id: str, page: int = 1, limit: int = 10) -> dict:
     try:
-        # Step 1 — get already enrolled contact_ids from DynamoDB
+        # ─────────────────────────────────────────────
+        # STEP 1: Get ALL enrolled contact_ids from DynamoDB (FIXED PAGINATION)
+        # ─────────────────────────────────────────────
         dynamodb = _get_dynamodb_client()
         table = dynamodb.Table("SequenceEnrollments")
 
-        response = table.query(
-            KeyConditionExpression=Key("sequence_id").eq(str(sequence_id)),
-            ProjectionExpression="contact_id"
-        )
-        enrolled_ids = [int(item["contact_id"]) for item in response.get("Items", [])]
+        enrolled_ids = []
+        last_evaluated_key = None
 
-        # Step 2 — fetch contacts from MySQL excluding enrolled ones
+        while True:
+            if last_evaluated_key:
+                response = table.query(
+                    KeyConditionExpression=Key("sequence_id").eq(str(sequence_id)),
+                    ProjectionExpression="contact_id",
+                    ExclusiveStartKey=last_evaluated_key
+                )
+            else:
+                response = table.query(
+                    KeyConditionExpression=Key("sequence_id").eq(str(sequence_id)),
+                    ProjectionExpression="contact_id"
+                )
+
+            enrolled_ids.extend(
+                [item["contact_id"] for item in response.get("Items", [])]
+            )
+
+            last_evaluated_key = response.get("LastEvaluatedKey")
+            if not last_evaluated_key:
+                break
+
+        # KEEP AS STRING (consistent with DynamoDB storage)
+        enrolled_ids = list(set(enrolled_ids))
+
+        # ─────────────────────────────────────────────
+        # STEP 2: Fetch contacts from MySQL excluding enrolled ones
+        # ─────────────────────────────────────────────
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
+
         offset = (page - 1) * limit
 
+        params = []
+
         if enrolled_ids:
-            placeholders = ", ".join(["%s"] * len(enrolled_ids))
+            placeholders = ",".join(["%s"] * len(enrolled_ids))
             exclude_clause = f"AND contactId NOT IN ({placeholders})"
+            params.extend(enrolled_ids)
         else:
             exclude_clause = ""
-            enrolled_ids = []
 
-        # count
-        cursor.execute(
-            f"SELECT COUNT(*) as total FROM contacts WHERE 1=1 {exclude_clause}",
-            enrolled_ids
-        )
+        # ─────────────────────────────────────────────
+        # COUNT QUERY
+        # ─────────────────────────────────────────────
+        count_query = f"""
+            SELECT COUNT(*) as total
+            FROM contacts
+            WHERE 1=1
+            {exclude_clause}
+        """
+
+        cursor.execute(count_query, params)
         total = cursor.fetchone()["total"]
 
-        # fetch
-        cursor.execute(
-            f"SELECT * FROM contacts WHERE 1=1 {exclude_clause} ORDER BY contactId DESC LIMIT %s OFFSET %s",
-            enrolled_ids + [limit, offset]
-        )
+        # ─────────────────────────────────────────────
+        # DATA QUERY
+        # ─────────────────────────────────────────────
+        data_query = f"""
+            SELECT *
+            FROM contacts
+            WHERE 1=1
+            {exclude_clause}
+            ORDER BY contactId DESC
+            LIMIT %s OFFSET %s
+        """
+
+        cursor.execute(data_query, params + [limit, offset])
         contacts = cursor.fetchall()
+
         cursor.close()
         conn.close()
 
@@ -488,4 +531,7 @@ def get_unenrolled_contacts(sequence_id: str, page: int = 1, limit: int = 10) ->
         }
 
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {
+            "status": "error",
+            "message": str(e)
+        }
