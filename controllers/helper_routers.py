@@ -42,16 +42,12 @@ async def delete_sequence_enrollment(email: str):
 
 @router.post("/crm-sequence-lead")
 async def create_crm_sequence_lead(
-    name: str = Body(...),
     email: str = Body(...),
-    company_name: str = Body(...),
     status: str = Body(default="open")
 ):
     try:
         return save_lead_from_sequence(
-            name=name,
             email=email,
-            company_name=company_name,
             status=status,
         )
 

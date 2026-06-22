@@ -62,9 +62,7 @@ def delete_sequence_enrollment_by_email(email: str) -> int:
 
 
 def save_lead_from_sequence(
-    name: str,
     email: str,
-    company_name: str,
     status: str = "open"
 ):
     TABLE_NAME = "CRMSequenceLeads"
@@ -72,18 +70,28 @@ def save_lead_from_sequence(
     if status not in {"open", "closed"}:
         raise ValueError("status must be either 'open' or 'closed'")
 
+    contact_details = get_contact_name_and_company_by_email(email)
+
+    if not contact_details:
+        raise ValueError(f"No contact found for email: {email}")
+
     table = _get_dynamodb_client().Table(TABLE_NAME)
 
     table.put_item(
         Item={
             "email": email,
-            "name": name,
-            "company_name": company_name,
+            "name": contact_details["name"],
+            "company_name": contact_details["company_name"],
             "status": status,
         }
     )
 
-    return {"message": "Lead saved successfully"}
+    return {
+        "message": "Lead saved successfully",
+        "email": email,
+        "name": contact_details["name"],
+        "company_name": contact_details["company_name"],
+    }
 
 
 def get_leads_by_status(status: str):
@@ -140,3 +148,42 @@ def update_lead_status(email: str, status: str):
 
     return response["Attributes"]
 
+def get_contact_name_and_company_by_email(email: str):
+    conn = get_db_connection()
+    if not conn:
+        return None
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+        SELECT
+            firstname,
+            lastname,
+            company
+        FROM contacts
+        WHERE email = %s
+        LIMIT 1
+        """
+
+        cursor.execute(query, (email,))
+        row = cursor.fetchone()
+
+        if not row:
+            return None
+
+        full_name = " ".join(
+            filter(None, [row["firstname"], row["lastname"]])
+        ).strip()
+
+        return {
+            "name": full_name,
+            "company_name": row["company"]
+        }
+
+    finally:
+        cursor.close()
+        conn.close()
+
+# resposne = get_contact_name_and_company_by_email("rafiye.kececi@migrosonline.com")
+# print(resposne)
