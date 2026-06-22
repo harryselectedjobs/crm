@@ -71,6 +71,7 @@ def save_lead_from_sequence(
         raise ValueError("status must be either 'open' or 'closed'")
 
     contact_details = get_contact_name_and_company_by_email(email)
+    print(contact_details)
 
     if not contact_details:
         raise ValueError(f"No contact found for email: {email}")
