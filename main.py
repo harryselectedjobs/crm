@@ -8,6 +8,7 @@ from controllers.contactUs_router import router as contact_us_router
 from controllers.auth_router import router as authentication_router
 from controllers.news_router import router as tech_news_router
 from controllers.email_transcript_router import router as email_transcript_router
+from controllers.helper_routers import router as helper_routers
 
 apps = FastAPI()
 
@@ -26,6 +27,7 @@ apps.include_router(contact_us_router)
 apps.include_router(authentication_router)
 apps.include_router(tech_news_router)
 apps.include_router(email_transcript_router)
+apps.include_router(helper_routers)
 
 
 if __name__ == "__main__":
