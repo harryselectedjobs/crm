@@ -79,7 +79,7 @@ async def fetch_crm_sequence_leads(status: str):
 @router.put("/crm-sequence-lead/{email}/status")
 async def change_crm_sequence_lead_status(
     email: str,
-    status: str = Body(...)
+    status: str = Body(..., embed=True)
 ):
     try:
         updated_record = update_lead_status(
