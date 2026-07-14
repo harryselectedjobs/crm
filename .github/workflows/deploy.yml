@@ -1,4 +1,4 @@
-name: Deploy to EC2
+name: Deploy CRM Backend
 
 on:
   push:
@@ -10,32 +10,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.0
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            if [ ! -d "crm" ]; then
-              git clone https://github.com/harryselectedjobs/crm.git
-            fi
-            cd crm
+            set -e
+
+            cd /var/www/html/crm
+
             git pull origin main
-            echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" > .env
-            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
-            echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> .env
-            echo "DB_HOST=${{ secrets.DB_HOST }}" >> .env
-            echo "DB_PORT=${{ secrets.DB_PORT }}" >> .env
-            echo "DB_USER=${{ secrets.DB_USER }}" >> .env
-            echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
-            echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
-            echo "GUARDIAN_API_KEY=${{ secrets.GUARDIAN_API_KEY }}" >> .env
-            docker build -t crm .
-            docker stop crm-container || true
-            docker rm crm-container || true
-            docker run -d -p 1802:1802 --env-file .env --name crm-container crm
+
+            if [ ! -d "venv" ]; then
+              python3.10 -m venv venv
+            fi
+
+            source venv/bin/activate
+
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            cat > .env <<EOF
+            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            AWS_REGION=${{ secrets.AWS_REGION }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            GUARDIAN_API_KEY=${{ secrets.GUARDIAN_API_KEY }}
+            EOF
+
+            sudo systemctl restart crm
+
+            echo "Backend deployment completed successfully."
